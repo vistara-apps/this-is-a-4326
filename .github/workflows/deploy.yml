@@ -26,6 +26,15 @@ jobs:
       run: npm run build
       env:
         NODE_OPTIONS: --max-old-space-size=4096
+
+    - name: Notify about missing Vercel secrets
+      if: secrets.VERCEL_TOKEN == ''
+      run: |
+        echo "ℹ️ Vercel deployment skipped - VERCEL_TOKEN secret not configured"
+        echo "To enable Vercel deployment, add the following secrets to your repository:"
+        echo "- VERCEL_TOKEN"
+        echo "- VERCEL_ORG_ID" 
+        echo "- VERCEL_PROJECT_ID"
         
     - name: Deploy to Vercel (Production)
       if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && secrets.VERCEL_TOKEN != ''
@@ -46,7 +55,7 @@ jobs:
         vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
         
     - name: Build Success Comment
-      if: github.event_name == 'pull_request' && success()
+      if: github.event_name == 'pull_request' && success() && secrets.VERCEL_TOKEN == ''
       uses: actions/github-script@v7
       with:
         script: |
@@ -62,6 +71,8 @@ jobs:
             - Static files optimized for production
             - All dependencies resolved
             - Build completed without errors
+            
+            ℹ️ **Note:** Vercel deployment was skipped because deployment secrets are not configured.
             
             ${context.payload.pull_request.head.sha.substring(0, 7)} - Latest commit built successfully`
           });
