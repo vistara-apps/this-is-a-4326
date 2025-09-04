@@ -53,26 +53,99 @@ export default function ProjectGenerator() {
   }
 
   const generateVariationsWithAI = async (data) => {
-    // This would integrate with OpenAI API
-    // For demo purposes, creating mock variations
-    const mockVariations = []
-    
-    for (let i = 0; i < data.variationCount; i++) {
-      for (const platform of data.platforms) {
-        mockVariations.push({
-          id: `${Date.now()}-${i}-${platform}`,
-          projectId: state.currentProject?.id,
-          platform,
-          creativeType: data.adType,
-          visualAssetUrl: data.productImage,
-          textCopy: generateMockAdCopy(platform, i),
-          status: 'generated',
-          createdAt: new Date().toISOString(),
-        })
+    try {
+      // Import OpenAI service
+      const { openaiService } = await import('../services/openai')
+      
+      const variations = []
+      
+      // Analyze the product image first if available
+      let productAnalysis = null
+      if (data.productImage && typeof data.productImage === 'string') {
+        try {
+          productAnalysis = await openaiService.analyzeProductImage(data.productImage)
+        } catch (error) {
+          console.warn('Could not analyze product image:', error)
+        }
       }
+      
+      // Generate variations for each platform
+      for (const platform of data.platforms) {
+        try {
+          // Generate ad copy variations
+          const adCopyVariations = await openaiService.generateAdCopy({
+            productDescription: productAnalysis?.description || 'Premium product',
+            platform,
+            tone: 'casual',
+            count: data.variationCount
+          })
+          
+          // Generate hashtags
+          const hashtags = await openaiService.generateHashtags({
+            productType: productAnalysis?.productType || 'product',
+            platform,
+            keywords: productAnalysis?.marketingAngles || []
+          })
+          
+          // Create variations with AI-generated content
+          for (let i = 0; i < Math.min(adCopyVariations.length, data.variationCount); i++) {
+            const variation = adCopyVariations[i]
+            
+            variations.push({
+              id: `${Date.now()}-${i}-${platform}`,
+              projectId: state.currentProject?.id,
+              platform,
+              creativeType: data.adType,
+              visualAssetUrl: data.productImage,
+              textCopy: variation.text || generateMockAdCopy(platform, i),
+              hook: variation.hook,
+              cta: variation.cta,
+              hashtags: variation.hashtags || hashtags.slice(0, 10),
+              status: 'generated',
+              createdAt: new Date().toISOString(),
+            })
+          }
+        } catch (error) {
+          console.error(`Error generating variations for ${platform}:`, error)
+          
+          // Fallback to mock data if AI generation fails
+          for (let i = 0; i < data.variationCount; i++) {
+            variations.push({
+              id: `${Date.now()}-${i}-${platform}-fallback`,
+              projectId: state.currentProject?.id,
+              platform,
+              creativeType: data.adType,
+              visualAssetUrl: data.productImage,
+              textCopy: generateMockAdCopy(platform, i),
+              status: 'generated',
+              createdAt: new Date().toISOString(),
+            })
+          }
+        }
+      }
+      
+      return variations
+    } catch (error) {
+      console.error('Error in generateVariationsWithAI:', error)
+      
+      // Complete fallback to mock variations
+      const mockVariations = []
+      for (let i = 0; i < data.variationCount; i++) {
+        for (const platform of data.platforms) {
+          mockVariations.push({
+            id: `${Date.now()}-${i}-${platform}`,
+            projectId: state.currentProject?.id,
+            platform,
+            creativeType: data.adType,
+            visualAssetUrl: data.productImage,
+            textCopy: generateMockAdCopy(platform, i),
+            status: 'generated',
+            createdAt: new Date().toISOString(),
+          })
+        }
+      }
+      return mockVariations
     }
-    
-    return mockVariations
   }
 
   const generateMockAdCopy = (platform, index) => {
